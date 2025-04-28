@@ -13,161 +13,122 @@ export const VideosQueries = {
     start_time?: Date,
     end_time?: Date,
   ) => {
-    let priorityCondition = '';
-    let locationCondition = '';
-    let alertTypeCondition = '';
-    let keywordCondition = '';
-    let dateCondition = '';
-    let timeCondition = '';
+    const conditions: string[] = [];
 
-    const normalizedPriorities = Array.isArray(priorities)
-      ? priorities
-      : typeof priorities === 'string'
-        ? [priorities]
-        : [];
-    const normalizedLocations = Array.isArray(locations)
-      ? locations
-      : typeof locations === 'string'
-        ? [locations]
-        : [];
-    const normalizedAlertTypes = Array.isArray(alertTypes)
-      ? alertTypes
-      : typeof alertTypes === 'string'
-        ? [alertTypes]
-        : [];
-    const normalizedKeywords = Array.isArray(keywords)
-      ? keywords
-      : typeof keywords === 'string'
-        ? [keywords]
-        : [];
+    // Process priorities - handle comma-separated strings properly
+    let normalizedPriorities: string[] = [];
+    if (Array.isArray(priorities)) {
+      normalizedPriorities = priorities;
+    } else if (typeof priorities === 'string') {
+      normalizedPriorities = priorities.split(',').map((item) => item.trim());
+    }
+
+    // Process locations - handle comma-separated strings properly
+    let normalizedLocations: string[] = [];
+    if (Array.isArray(locations)) {
+      normalizedLocations = locations;
+    } else if (typeof locations === 'string') {
+      normalizedLocations = locations.split(',').map((item) => item.trim());
+    }
+
+    // Process alertTypes - handle comma-separated strings properly
+    let normalizedAlertTypes: string[] = [];
+    if (Array.isArray(alertTypes)) {
+      normalizedAlertTypes = alertTypes;
+    } else if (typeof alertTypes === 'string') {
+      normalizedAlertTypes = alertTypes.split(',').map((item) => item.trim());
+    }
+
+    // Process keywords - handle comma-separated strings properly
+    let normalizedKeywords: string[] = [];
+    if (Array.isArray(keywords)) {
+      normalizedKeywords = keywords;
+    } else if (typeof keywords === 'string') {
+      normalizedKeywords = keywords.split(',').map((item) => item.trim());
+    }
 
     if (normalizedPriorities.length > 0) {
-      priorityCondition = `WHERE v.priority IN ('${normalizedPriorities.join("', '")}')`;
+      conditions.push(
+        `v.priority IN (${normalizedPriorities.map((p) => `'${p}'`).join(', ')})`,
+      );
     }
 
     if (normalizedLocations.length > 0) {
-      if (priorityCondition) {
-        locationCondition = `AND v.location IN ('${normalizedLocations.join("', '")}')`;
-      } else {
-        locationCondition = `WHERE v.location IN ('${normalizedLocations.join("', '")}')`;
-      }
+      conditions.push(
+        `v.location IN (${normalizedLocations.map((l) => `'${l}'`).join(', ')})`,
+      );
     }
 
     if (normalizedAlertTypes.length > 0) {
-      if (priorityCondition || locationCondition) {
-        alertTypeCondition = `AND ale.type IN ('${normalizedAlertTypes.join("', '")}')`;
-      } else {
-        alertTypeCondition = `WHERE ale.type IN ('${normalizedAlertTypes.join("', '")}')`;
-      }
+      conditions.push(
+        `ale.type IN (${normalizedAlertTypes.map((t) => `'${t}'`).join(', ')})`,
+      );
     }
 
     if (normalizedKeywords.length > 0) {
-      if (priorityCondition || locationCondition || alertTypeCondition) {
-        keywordCondition = `AND oc.object_type IN ('${normalizedKeywords.join("', '")}')`;
-      } else {
-        keywordCondition = `WHERE oc.object_type IN ('${normalizedKeywords.join("', '")}')`;
-      }
+      conditions.push(
+        `oc.object_type IN (${normalizedKeywords.map((k) => `'${k}'`).join(', ')})`,
+      );
     }
 
     if (start_date && end_date) {
-      let startDate = start_date;
-      let endDate = end_date;
-
-      if (startDate && typeof startDate === 'string') {
-        startDate = new Date(startDate);
-      }
-
-      if (endDate && typeof endDate === 'string') {
-        endDate = new Date(endDate);
-      }
+      const startDate =
+        typeof start_date === 'string' ? new Date(start_date) : start_date;
+      const endDate =
+        typeof end_date === 'string' ? new Date(end_date) : end_date;
 
       const startDateStr = startDate.toISOString().split('T')[0];
       const endDateStr = endDate.toISOString().split('T')[0];
 
       if (startDateStr === endDateStr) {
-        if (priorityCondition || locationCondition || alertTypeCondition) {
-          dateCondition = `AND v.\`date\` = '${startDateStr}'`;
-        } else {
-          dateCondition = `WHERE v.\`date\` = '${startDateStr}'`;
-        }
+        conditions.push(`v.\`date\` = '${startDateStr}'`);
       } else {
-        if (priorityCondition || locationCondition || alertTypeCondition) {
-          dateCondition = `AND v.\`date\` BETWEEN '${startDateStr}' AND '${endDateStr}'`;
-        } else {
-          dateCondition = `WHERE v.\`date\` BETWEEN '${startDateStr}' AND '${endDateStr}'`;
-        }
+        conditions.push(
+          `v.\`date\` BETWEEN '${startDateStr}' AND '${endDateStr}'`,
+        );
       }
-    }
-
-    if (!start_date && !end_date) {
-      dateCondition = '';
     }
 
     if (start_time && end_time) {
-      let startTime = start_time;
-      let endTime = end_time;
-
-      if (typeof startTime === 'string') {
-        startTime = new Date(startTime);
-      }
-
-      if (typeof endTime === 'string') {
-        endTime = new Date(endTime);
-      }
+      const startTime =
+        typeof start_time === 'string' ? new Date(start_time) : start_time;
+      const endTime =
+        typeof end_time === 'string' ? new Date(end_time) : end_time;
 
       const startHour = startTime.getHours();
       const endHour = endTime.getHours();
 
-      const prefix =
-        priorityCondition ||
-        locationCondition ||
-        alertTypeCondition ||
-        dateCondition ||
-        keywordCondition
-          ? 'AND'
-          : 'WHERE';
-
       if (startHour === endHour) {
-        timeCondition = `${prefix} HOUR(ts.\`hour\`) = ${startHour}`;
+        conditions.push(`HOUR(ts.\`hour\`) = ${startHour}`);
+      } else if (endHour < startHour) {
+        conditions.push(
+          `(HOUR(ts.\`hour\`) >= ${startHour} OR HOUR(ts.\`hour\`) <= ${endHour})`,
+        );
       } else {
-        if (endHour < startHour) {
-          timeCondition = `${prefix} (HOUR(ts.\`hour\`) >= ${startHour} OR HOUR(ts.\`hour\`) <= ${endHour})`;
-        } else {
-          timeCondition = `${prefix} (HOUR(ts.\`hour\`) BETWEEN ${startHour} AND ${endHour})`;
-        }
+        conditions.push(
+          `(HOUR(ts.\`hour\`) BETWEEN ${startHour} AND ${endHour})`,
+        );
       }
     }
 
-    Logger.log(
-      `
-      SELECT v.*, ale.type, ale.\`timestamp\`, ts.\`hour\`, ts.video_minute, oc.object_type, oc.object_count
-      FROM videos v
-      JOIN alerts ale ON v.video_id = ale.video_id
-      JOIN timeslots ts ON v.video_id = ts.video_id
-      JOIN object_counts oc ON v.video_id = oc.video_id AND ts.\`hour\` = oc.\`hour\`
-      ${priorityCondition}
-      ${locationCondition}
-      ${alertTypeCondition}
-      ${keywordCondition}
-      ${dateCondition}
-      ${timeCondition}
-      ${timeCondition ? 'AND ale.\`timestamp\` = ts.\`hour\`' : ''}
-      `,
-    );
+    if (start_time && end_time) {
+      conditions.push(`ale.\`timestamp\` = ts.\`hour\``);
+    }
 
-    return `
+    const whereClause =
+      conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+
+    const query = `
       SELECT v.*, ale.type, ale.\`timestamp\`, ts.\`hour\`, ts.video_minute, oc.object_type, oc.object_count
       FROM videos v
       JOIN alerts ale ON v.video_id = ale.video_id
       JOIN timeslots ts ON v.video_id = ts.video_id
       JOIN object_counts oc ON v.video_id = oc.video_id AND ts.\`hour\` = oc.\`hour\`
-      ${priorityCondition}
-      ${locationCondition}
-      ${alertTypeCondition}
-      ${keywordCondition}
-      ${dateCondition}
-      ${timeCondition}
-      ${timeCondition ? 'AND ale.\`timestamp\` = ts.\`hour\`' : ''}
+      ${whereClause}
     `;
+
+    Logger.log(query);
+
+    return query;
   },
 };
